@@ -87,6 +87,13 @@ async def reestablish_connection(connection: Connection, args: Args):
             await asyncio.sleep(pushback)
             pushback = min(pushback * 2, 30)
             continue
+        except Exception:
+            LOGGER.debug(
+                "Failed to reestablish connection, retrying in %d seconds.", pushback
+            )
+            await asyncio.sleep(pushback)
+            pushback = min(pushback * 2, 30)
+            continue
 
     volatile_writer.write(Constants.OLD_CONNECTION.to_bytes(1, "big"))
     volatile_writer.write(connection.uuid.bytes)
@@ -154,10 +161,7 @@ def connection_callback(args: Args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM):
                     max_buffer_size=Constants.MAX_BUFFER_SIZE,
                 )
 
-                if (
-                    len(alive_connections) + len(dead_tracker)
-                    >= args.max_connections
-                ):
+                if len(alive_connections) + len(dead_tracker) >= args.max_connections:
                     await connection.close(True)
                     raise GenericException("Connection limit reached.")
 
@@ -173,8 +177,12 @@ def connection_callback(args: Args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM):
 async def main(args: Args):
     NEW_CONNECTION_SEM = asyncio.Semaphore(10)
     CONNECTION_DICT_SYNC = asyncio.Condition()
-    
-    await asyncio.start_server(connection_callback(args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM), "localhost", args.local_port)
+
+    await asyncio.start_server(
+        connection_callback(args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM),
+        "localhost",
+        args.local_port,
+    )
 
     while True:
 
@@ -185,9 +193,7 @@ async def main(args: Args):
             LOGGER.debug("Waiting for ready tasks.")
             done_tasks, _ = await asyncio.wait(
                 itertools.chain(
-                    [notify_task],
-                    alive_tasks.keys(),
-                    reestablishing_tasks.keys()
+                    [notify_task], alive_tasks.keys(), reestablishing_tasks.keys()
                 ),
                 return_when=asyncio.FIRST_COMPLETED,
             )
@@ -236,7 +242,9 @@ async def main(args: Args):
 
                     alive_connections[uuid] = connection
                     alive_processes[uuid] = proc
-                    alive_task = asyncio.create_task(normal_operation(connection, start_packets=packets_to_resend))
+                    alive_task = asyncio.create_task(
+                        normal_operation(connection, start_packets=packets_to_resend)
+                    )
                     alive_tasks[alive_task] = uuid
 
                 else:
