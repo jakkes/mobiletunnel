@@ -15,3 +15,6 @@ authors = [
 maintainers = [
   {name = "Jakob Stigenberg", email = "jakob@jakke.se"}
 ]
+
+[tool.hatch.build.targets.wheel]
+  packages = ["src/mobiletunnel"]
