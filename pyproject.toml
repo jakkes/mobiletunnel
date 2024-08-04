@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mobiletunnel"
+version = "0.0.1"
+dependencies = [
+  "typed-argument-parser"
+]
+requires-python = ">=3.10"
+authors = [
+  {name = "Jakob Stigenberg", email = "jakob@jakke.se"}
+]
+maintainers = [
+  {name = "Jakob Stigenberg", email = "jakob@jakke.se"}
+]
