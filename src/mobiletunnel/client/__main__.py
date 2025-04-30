@@ -32,18 +32,26 @@ class FatalError(Exception):
 class Args(tap.Tap):
 
     host: str
+    """Host of remote to open a tunnel to."""
     port: int
+    """Port of the remote server."""
 
     local_port: int
+    """Local port to forward to the remote server."""
+
     remote_port: int
+    """Remote port that the connections should be forwarded to."""
+
+    path_to_remote_python: str
+    """Path to the remote python executable, with mobiletunnel installed."""
 
     max_connections: int = 1024
 
 
-async def open_ssh_connection(host: str, port: int):
+async def open_ssh_connection(host: str, port: int, path_to_remote_python: str):
     LOGGER.debug("Starting SSH connection.")
     proc = await asyncio.subprocess.create_subprocess_shell(
-        f'ssh {host} "/home/jakkes/projects/mobiletunnel/venv/bin/python '
+        f'ssh {host} "{path_to_remote_python} '
         f'-m mobiletunnel.relay --port {port}"',
         stdin=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -72,7 +80,7 @@ async def reestablish_connection(connection: Connection, args: Args):
     while True:
         try:
             proc, volatile_reader, volatile_writer = await open_ssh_connection(
-                args.host, args.port
+                args.host, args.port, args.path_to_remote_python
             )
             break
         except FatalError as e:
@@ -132,7 +140,7 @@ def connection_callback(args: Args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM):
             LOGGER.info("New connection received.")
 
             proc, volatile_reader, volatile_writer = await open_ssh_connection(
-                args.host, args.port
+                args.host, args.port, args.path_to_remote_python
             )
 
             volatile_writer.write(PROTOCOL_VERSION.to_bytes(1, "big"))
