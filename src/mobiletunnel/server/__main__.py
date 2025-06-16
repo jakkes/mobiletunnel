@@ -115,9 +115,18 @@ async def setup_new_connection(
 async def setup_old_connection(
     volatile_reader: asyncio.StreamReader, volatile_writer: asyncio.StreamWriter
 ):
-    LOGGER.info("Setting up old connection.")
-    uuid_bytes = await volatile_reader.readexactly(16)
+    LOGGER.debug("Setting up old connection.")
+    uuid_bytes = []
+    LOGGER.debug("Reading UUID bytes...")
+    for _ in range(16):
+        byte = await volatile_reader.readexactly(1)
+        uuid_bytes.append(byte)
+        LOGGER.debug("Received byte: %s", byte)
+    # uuid_bytes = await volatile_reader.readexactly(16)
+    uuid_bytes = b"".join(uuid_bytes)
     uuid = UUID(bytes=uuid_bytes)
+
+    LOGGER.debug("Received UUID: %s", uuid)
 
     async with CONNECTION_DICT_SYNC:
         if uuid in alive_connections:

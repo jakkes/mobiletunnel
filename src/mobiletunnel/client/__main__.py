@@ -52,7 +52,7 @@ class Args(tap.Tap):
 async def open_ssh_connection(host: str, port: int, path_to_remote_python: str):
     LOGGER.debug("Starting SSH connection.")
     proc = await asyncio.subprocess.create_subprocess_shell(
-        f'ssh {host} "{path_to_remote_python} '
+        f'ssh -o ConnectTimeout 1 -o ServerAliveInterval 1 {host} "{path_to_remote_python} '
         f'-m mobiletunnel.relay --port {port}"',
         stdin=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -71,6 +71,10 @@ async def open_ssh_connection(host: str, port: int, path_to_remote_python: str):
         proc.kill()
         await proc.wait()
         raise FatalError("Version mismatch.")
+
+    volatile_writer.write(PROTOCOL_VERSION.to_bytes(1, "big"))
+    await volatile_writer.drain()
+    LOGGER.debug("Version handshake successful.")
 
     return proc, volatile_reader, volatile_writer
 
@@ -104,6 +108,7 @@ async def reestablish_connection(connection: Connection, args: Args):
             pushback = min(pushback * 2, 30)
             continue
 
+    LOGGER.debug("Reestablishing connection for UUID: %s (%d bytes)", connection.uuid, len(connection.uuid.bytes))
     volatile_writer.write(Constants.OLD_CONNECTION.to_bytes(1, "big"))
     volatile_writer.write(connection.uuid.bytes)
     volatile_writer.write(connection.counter.to_bytes(1, "big"))
@@ -143,10 +148,6 @@ def connection_callback(args: Args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM):
             proc, volatile_reader, volatile_writer = await open_ssh_connection(
                 args.host, args.port, args.path_to_remote_python
             )
-
-            volatile_writer.write(PROTOCOL_VERSION.to_bytes(1, "big"))
-            await volatile_writer.drain()
-            LOGGER.debug("Version handshake successful.")
 
             volatile_writer.write(Constants.NEW_CONNECTION.to_bytes(1, "big"))
             volatile_writer.write(args.remote_port.to_bytes(2, "big"))
