@@ -133,6 +133,7 @@ async def setup_old_connection(
             LOGGER.debug("Checking that task is done.")
             if not task.done():
                 raise RuntimeError("Task not done after cancellation.")
+            LOGGER.debug("Task is done.")
             connection = alive_connections.pop(uuid)
 
             LOGGER.debug("Closing old connection writer.")
