@@ -49,6 +49,9 @@ class KeyKeyStore(Generic[S, T]):
     def keys0(self) -> set[S]:
         return self._a.keys()
 
+    def __len__(self) -> int:
+        return len(self._a)
+
 class GenericException(Exception):
     def __init__(self, msg: str):
         super().__init__(msg)
