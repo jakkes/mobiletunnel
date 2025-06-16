@@ -194,6 +194,8 @@ class Connection:
         self._received_counter = 0
         self._last_communicated_counter = 0
 
+        self.tasks = NormalOperationTasks()
+
     @property
     def counter(self) -> int:
         assert 0 <= self._received_counter < Constants.MAX_SEQUENCE_LENGTH
@@ -310,21 +312,29 @@ class NormalOperationTasks:
 async def _normal_operation(
     connection: Connection, *, start_packets: list[bytes] | None = None
 ):
+    if start_packets is None:
+        start_packets = []
 
     LOGGER.info("Starting normal operation for uuid %s.", connection.uuid)
 
-    initial_packets = collections.deque[bytes](start_packets or [])
+    # These are packets that should be resent before resuming normal operation.
+    initial_packets = collections.deque[bytes](start_packets)
 
-    tasks = NormalOperationTasks()
+    # If we did not manage to stop the stable read task in time, we might end up
+    # with a single packet that we need to send after the initial packets are exhausted.
+    packet_to_send_after_initial_packets_exhausted: bytes | None = None
+
+    tasks = connection.tasks
 
     if len(initial_packets) > 0:
         tasks.volatile_write = asyncio.create_task(
             connection.send_packet(initial_packets.popleft(), is_resend=True)
         )
-    else:
+    elif tasks.stable_read is None:
         tasks.buffer_availability = asyncio.create_task(
             connection.packet_queue.buffer_availability()
         )
+
     tasks.volatile_read = asyncio.create_task(connection.receive_packet())
 
     while True:
@@ -349,9 +359,15 @@ async def _normal_operation(
                     return
 
                 tasks.stable_read = None
-                tasks.volatile_write = asyncio.create_task(
-                    connection.send_packet(packet)
-                )
+                # If we other packets to send, store this packet to send after
+                # the initial packets are exhausted.
+                if len(initial_packets) > 0:
+                    assert packet_to_send_after_initial_packets_exhausted is None
+                    packet_to_send_after_initial_packets_exhausted = packet
+                else:
+                    tasks.volatile_write = asyncio.create_task(
+                        connection.send_packet(packet)
+                    )
 
             elif task is tasks.stable_write:
                 await tasks.stable_write
@@ -382,6 +398,13 @@ async def _normal_operation(
                             initial_packets.popleft(), is_resend=True
                         )
                     )
+                elif packet_to_send_after_initial_packets_exhausted is not None:
+                    tasks.volatile_write = asyncio.create_task(
+                        connection.send_packet(
+                            packet_to_send_after_initial_packets_exhausted,
+                        )
+                    )
+                    packet_to_send_after_initial_packets_exhausted = None
                 else:
                     tasks.buffer_availability = asyncio.create_task(
                         connection.packet_queue.buffer_availability()
