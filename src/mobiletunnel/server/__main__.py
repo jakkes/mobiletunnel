@@ -187,11 +187,25 @@ async def main(args: Args):
     await asyncio.start_server(new_connection_callback, "localhost", args.port)
 
     while True:
+
+        LOGGER.debug(
+            "Entering main loop step. Currently there are %d alive tasks, "
+            "%d alive connections, and %d dead connections.",
+            len(alive_tasks),
+            len(alive_connections),
+            len(dead_connections)
+        )
+
         async with CONNECTION_DICT_SYNC:
             notify_task = asyncio.create_task(CONNECTION_DICT_SYNC.wait())
             done_tasks, _ = await asyncio.wait(
                 itertools.chain([notify_task], alive_tasks.keys0()),
                 return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            LOGGER.debug(
+                "Main loop about to process done tasks. Top repr are: %s",
+                str([repr(task) for task in list(done_tasks)[:3]])
             )
 
             if notify_task not in done_tasks:
@@ -203,6 +217,8 @@ async def main(args: Args):
 
             for task in done_tasks:
                 if task.cancelled():
+                    assert task is not notify_task
+                    LOGGER.debug("Task %s was cancelled.", task)
                     continue
 
                 await task

@@ -257,11 +257,11 @@ async def main(args: Args):
 
                 elif task in reestablishing_tasks:
                     LOGGER.debug("Reestablishing task.")
+                    proc, packets_to_resend = await task
 
                     uuid = reestablishing_tasks.pop(task)
 
                     LOGGER.debug("Reestablished connection for uuid %s.", uuid)
-                    proc, packets_to_resend = await task
                     _, connection = dead_tracker.pop(uuid)
 
                     alive_connections[uuid] = connection
