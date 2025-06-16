@@ -131,6 +131,8 @@ async def setup_old_connection(
             task.cancel()
             assert task.done(), "Task should be done after cancellation"
             connection = alive_connections.pop(uuid)
+
+            LOGGER.debug("Closing old connection writer.")
             connection.volatile_writer.close()
             await connection.volatile_writer.wait_closed()
 
@@ -138,6 +140,7 @@ async def setup_old_connection(
             LOGGER.debug("Connection found in dead connections")
             connection, _ = dead_connections.pop(uuid)
 
+        LOGGER.debug("Setting new connection parameters.")
         connection.volatile_reader = volatile_reader
         connection.volatile_writer = volatile_writer
 

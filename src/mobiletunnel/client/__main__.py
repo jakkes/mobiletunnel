@@ -92,10 +92,10 @@ async def reestablish_connection(connection: Connection, args: Args):
             LOGGER.error("Failed to reestablish connection. %s", e.message)
             raise e
         except Exception as e:
+            LOGGER.exception(e)
             LOGGER.debug(
-                "Failed to reestablish connection, retrying in %d seconds. %s",
+                "Failed to reestablish connection, retrying in %d seconds",
                 pushback,
-                e,
             )
             await asyncio.sleep(pushback)
             pushback = min(pushback + 1, 10)
