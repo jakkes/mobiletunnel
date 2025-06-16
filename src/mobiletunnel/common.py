@@ -344,6 +344,7 @@ async def _normal_operation(
             if task is tasks.buffer_availability:
                 buffer_availability = await tasks.buffer_availability
                 tasks.buffer_availability = None
+                assert tasks.stable_read is None
                 tasks.stable_read = asyncio.create_task(
                     connection.stable_reader.read(
                         min(buffer_availability, Constants.MAX_PACKET_SIZE)
