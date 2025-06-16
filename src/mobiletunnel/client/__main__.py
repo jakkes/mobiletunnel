@@ -196,11 +196,9 @@ async def main(args: Args):
     while True:
 
         LOGGER.debug(
-            """
-            Entering main loop step. Currently there are %d alive tasks,
-            %d alive connections, %d alive processes, %d dead connections,
-            and %d reestablishing tasks.
-            """,
+            "Entering main loop step. Currently there are %d alive tasks, "
+            "%d alive connections, %d alive processes, %d dead connections "
+            "and %d reestablishing tasks.",
             len(alive_tasks),
             len(alive_connections),
             len(alive_processes),
@@ -221,7 +219,7 @@ async def main(args: Args):
             )
             LOGGER.debug(
                 "Main loop about to process done tasks. Top repr are: %s",
-                str([repr(task) for task in done_tasks[:3]])
+                str([repr(task) for task in list(done_tasks)[:3]])
             )
 
             if notify_task not in done_tasks:

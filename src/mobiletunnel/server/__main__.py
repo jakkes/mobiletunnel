@@ -5,7 +5,12 @@ import datetime
 from uuid import uuid4, UUID
 
 from mobiletunnel.logging import get_logger
-from mobiletunnel.common import Constants, Connection, GenericException, normal_operation
+from mobiletunnel.common import (
+    Constants,
+    Connection,
+    GenericException,
+    normal_operation,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -24,7 +29,6 @@ class Args(tap.Tap):
 
 
 async def reestablish_normal_operation(connection: Connection):
-
     connection.volatile_writer.write(Constants.OLD_CONNECTION)
     connection.volatile_writer.write(connection.counter.to_bytes(1, "big"))
     await connection.volatile_writer.drain()
@@ -39,6 +43,7 @@ async def reestablish_normal_operation(connection: Connection):
     nonreceived_packets = await connection.packet_queue.get_nonverified_packets()
 
     await normal_operation(connection, start_packets=nonreceived_packets)
+
 
 async def handshake_protocol_version(
     reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -57,10 +62,10 @@ async def handshake_protocol_version(
 
     LOGGER.debug("Version handshake successful.")
 
+
 async def setup_new_connection(
     volatile_reader: asyncio.StreamReader, volatile_writer: asyncio.StreamWriter
 ):
-
     LOGGER.info("Setting up new connection.")
 
     port_bytes = await volatile_reader.readexactly(2)
@@ -75,7 +80,12 @@ async def setup_new_connection(
     LOGGER.debug("Assigning UUID: %s", uuid)
 
     connection = Connection(
-        volatile_reader, volatile_writer, stable_reader, stable_writer, uuid=uuid, max_buffer_size=Constants.MAX_BUFFER_SIZE
+        volatile_reader,
+        volatile_writer,
+        stable_reader,
+        stable_writer,
+        uuid=uuid,
+        max_buffer_size=Constants.MAX_BUFFER_SIZE,
     )
 
     volatile_writer.write(uuid.bytes)
@@ -92,7 +102,6 @@ async def setup_new_connection(
     LOGGER.info("Connection established.")
 
     async with CONNECTION_DICT_SYNC:
-
         if len(alive_connections) + len(dead_connections) >= args.max_connections:
             await connection.close(True)
             raise GenericException("Connection limit reached.")
@@ -101,6 +110,7 @@ async def setup_new_connection(
         alive_connections[uuid] = connection
         alive_tasks[task] = uuid
         CONNECTION_DICT_SYNC.notify()
+
 
 async def setup_old_connection(
     volatile_reader: asyncio.StreamReader, volatile_writer: asyncio.StreamWriter
@@ -130,8 +140,11 @@ async def setup_old_connection(
         connection.volatile_writer = volatile_writer
 
         alive_connections[uuid] = connection
-        alive_tasks[asyncio.create_task(reestablish_normal_operation(connection))] = uuid
+        alive_tasks[asyncio.create_task(reestablish_normal_operation(connection))] = (
+            uuid
+        )
         CONNECTION_DICT_SYNC.notify()
+
 
 async def setup_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     LOGGER.info("Handshaking connection ID.")
@@ -147,10 +160,10 @@ async def setup_connection(reader: asyncio.StreamReader, writer: asyncio.StreamW
     elif connection_code == Constants.OLD_CONNECTION:
         await setup_old_connection(reader, writer)
 
+
 async def new_connection_callback(
     reader: asyncio.StreamReader, writer: asyncio.StreamWriter
 ):
-
     async with NEW_CONNECTION_SEM:
         LOGGER.info("New connection received.")
 
@@ -160,16 +173,16 @@ async def new_connection_callback(
         except GenericException as e:
             LOGGER.error(e.message)
 
+
 async def main(args: Args):
     await asyncio.start_server(new_connection_callback, "localhost", args.port)
 
     while True:
-
         async with CONNECTION_DICT_SYNC:
-
             notify_task = asyncio.create_task(CONNECTION_DICT_SYNC.wait())
             done_tasks, _ = await asyncio.wait(
-                itertools.chain([notify_task], alive_tasks.keys()), return_when=asyncio.FIRST_COMPLETED
+                itertools.chain([notify_task], alive_tasks.keys()),
+                return_when=asyncio.FIRST_COMPLETED,
             )
 
             if notify_task not in done_tasks:
