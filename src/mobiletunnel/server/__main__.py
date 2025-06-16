@@ -126,7 +126,7 @@ async def setup_old_connection(
 
     async with CONNECTION_DICT_SYNC:
         if uuid in alive_connections:
-            LOGGER.debug("Connection found in alive tasks.", uuid)
+            LOGGER.debug("Connection found in alive tasks.")
             task = alive_tasks.pop1(uuid)
             task.cancel()
             assert task.done(), "Task should be done after cancellation"
@@ -135,7 +135,7 @@ async def setup_old_connection(
             await connection.volatile_writer.wait_closed()
 
         elif uuid in dead_connections:
-            LOGGER.debug("Connection found in dead connections", uuid)
+            LOGGER.debug("Connection found in dead connections")
             connection, _ = dead_connections.pop(uuid)
 
         connection.volatile_reader = volatile_reader
