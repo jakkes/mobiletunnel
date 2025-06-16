@@ -10,6 +10,7 @@ from mobiletunnel.common import (
     Connection,
     GenericException,
     normal_operation,
+    KeyKeyStore
 )
 
 LOGGER = get_logger(__name__)
@@ -18,7 +19,7 @@ NEW_CONNECTION_SEM = asyncio.Semaphore(10)
 CONNECTION_DICT_SYNC = asyncio.Condition()
 PROTOCOL_VERSION = 0x00
 
-alive_tasks: dict[asyncio.Task, UUID] = {}
+alive_tasks: KeyKeyStore[asyncio.Task, UUID] = {}
 alive_connections: dict[UUID, Connection] = {}
 dead_connections: dict[UUID, tuple[Connection, datetime.datetime]] = {}
 
@@ -110,7 +111,7 @@ async def setup_new_connection(
 
         task = asyncio.create_task(normal_operation(connection))
         alive_connections[uuid] = connection
-        alive_tasks[task] = uuid
+        alive_tasks.add(task, uuid)
         CONNECTION_DICT_SYNC.notify()
 
 
@@ -118,44 +119,31 @@ async def setup_old_connection(
     volatile_reader: asyncio.StreamReader, volatile_writer: asyncio.StreamWriter
 ):
     LOGGER.debug("Setting up old connection.")
-    uuid_bytes = []
-    LOGGER.debug("Reading UUID bytes...")
-    for _ in range(16):
-        byte = await volatile_reader.readexactly(1)
-        uuid_bytes.append(byte)
-        LOGGER.debug("Received byte: %s", byte)
-    # uuid_bytes = await volatile_reader.readexactly(16)
-    uuid_bytes = b"".join(uuid_bytes)
+    uuid_bytes = await volatile_reader.readexactly(16)
     uuid = UUID(bytes=uuid_bytes)
 
     LOGGER.debug("Received UUID: %s", uuid)
 
     async with CONNECTION_DICT_SYNC:
         if uuid in alive_connections:
-            LOGGER.debug("UUID already in use: %s", uuid)
-            volatile_writer.write(Constants.CONNECTION_ERROR)
-            await volatile_writer.drain()
-            volatile_writer.close()
-            await volatile_writer.wait_closed()
-            raise GenericException("UUID already in use.")
+            LOGGER.debug("Connection found in alive tasks.", uuid)
+            task = alive_tasks.pop1(uuid)
+            task.cancel()
+            assert task.done(), "Task should be done after cancellation"
+            connection = alive_connections.pop(uuid)
+            connection.volatile_writer.close()
+            await connection.volatile_writer.wait_closed()
 
-        if uuid not in dead_connections:
-            LOGGER.debug("UUID not found among dead connections: %s", uuid)
-            volatile_writer.write(Constants.CONNECTION_ERROR)
-            await volatile_writer.drain()
-            volatile_writer.close()
-            await volatile_writer.wait_closed()
-            raise GenericException("UUID not found among dead connections.")
-
-        LOGGER.debug("UUID found among dead connections: %s", uuid)
-        connection, _ = dead_connections.pop(uuid)
+        elif uuid in dead_connections:
+            LOGGER.debug("Connection found in dead connections", uuid)
+            connection, _ = dead_connections.pop(uuid)
 
         connection.volatile_reader = volatile_reader
         connection.volatile_writer = volatile_writer
 
         alive_connections[uuid] = connection
-        alive_tasks[asyncio.create_task(reestablish_normal_operation(connection))] = (
-            uuid
+        alive_tasks.add(
+            asyncio.create_task(normal_operation(connection)), uuid
         )
         CONNECTION_DICT_SYNC.notify()
 
@@ -195,7 +183,7 @@ async def main(args: Args):
         async with CONNECTION_DICT_SYNC:
             notify_task = asyncio.create_task(CONNECTION_DICT_SYNC.wait())
             done_tasks, _ = await asyncio.wait(
-                itertools.chain([notify_task], alive_tasks.keys()),
+                itertools.chain([notify_task], alive_tasks.keys0()),
                 return_when=asyncio.FIRST_COMPLETED,
             )
 
@@ -207,12 +195,15 @@ async def main(args: Args):
                     pass
 
             for task in done_tasks:
+                if task.cancelled():
+                    continue
+
                 await task
 
                 if task is notify_task:
                     continue
 
-                uuid = alive_tasks.pop(task)
+                uuid = alive_tasks.pop0(task)
                 connection = alive_connections.pop(uuid)
 
                 if connection.stable_writer.is_closing():

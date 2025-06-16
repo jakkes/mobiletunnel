@@ -2,11 +2,52 @@ import asyncio
 import collections
 import dataclasses
 from uuid import UUID
+from typing import Generic, TypeVar
 from .logging import get_logger
 
 
 LOGGER = get_logger(__name__)
 
+S = TypeVar("S")
+T = TypeVar("T")
+
+class KeyKeyStore(Generic[S, T]):
+    def __init__(self):
+        self._a: dict[S, T] = {}
+        self._b: dict[T, S] = {}
+
+    def add(self, key_a: S, key_b: T):
+        if key_a in self._a or key_b in self._b:
+            raise KeyError("Key already exists in the store.")
+        self._a[key_a] = key_b
+        self._b[key_b] = key_a
+
+    def get0(self, key_a: S) -> T:
+        if key_a not in self._a:
+            raise KeyError("Key not found in the store.")
+        return self._a[key_a]
+    
+    def get1(self, key_b: T) -> S:
+        if key_b not in self._b:
+            raise KeyError("Key not found in the store.")
+        return self._b[key_b]
+
+    def pop0(self, key_a: S) -> T:
+        if key_a not in self._a:
+            raise KeyError("Key not found in the store.")
+        key_b = self._a.pop(key_a)
+        self._b.pop(key_b)
+        return key_b
+
+    def pop1(self, key_b: T) -> S:
+        if key_b not in self._b:
+            raise KeyError("Key not found in the store.")
+        key_a = self._b.pop(key_b)
+        self._a.pop(key_a)
+        return key_a
+
+    def keys0(self) -> set[S]:
+        return self._a.keys()
 
 class GenericException(Exception):
     def __init__(self, msg: str):

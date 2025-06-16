@@ -91,22 +91,14 @@ async def reestablish_connection(connection: Connection, args: Args):
         except FatalError as e:
             LOGGER.error("Failed to reestablish connection. %s", e.message)
             raise e
-        except GenericException as e:
+        except Exception as e:
             LOGGER.debug(
                 "Failed to reestablish connection, retrying in %d seconds. %s",
                 pushback,
-                e.message,
+                e,
             )
             await asyncio.sleep(pushback)
-            pushback = min(pushback * 2, 30)
-            continue
-        except Exception:
-            LOGGER.exception()
-            LOGGER.debug(
-                "Failed to reestablish connection, retrying in %d seconds.", pushback
-            )
-            await asyncio.sleep(pushback)
-            pushback = min(pushback * 2, 30)
+            pushback = min(pushback + 1, 10)
             continue
 
     LOGGER.debug("Reestablishing connection for UUID: %s (%d bytes)", connection.uuid, len(connection.uuid.bytes))
