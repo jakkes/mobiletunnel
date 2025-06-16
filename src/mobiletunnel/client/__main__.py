@@ -52,7 +52,7 @@ class Args(tap.Tap):
 async def open_ssh_connection(host: str, port: int, path_to_remote_python: str):
     LOGGER.debug("Starting SSH connection.")
     proc = await asyncio.subprocess.create_subprocess_shell(
-        f'ssh -o ConnectTimeout 1 -o ServerAliveInterval 1 {host} "{path_to_remote_python} '
+        f'ssh -o ConnectTimeout=1 -o ServerAliveInterval=1 {host} "{path_to_remote_python} '
         f'-m mobiletunnel.relay --port {port}"',
         stdin=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -145,41 +145,46 @@ def connection_callback(args: Args, CONNECTION_DICT_SYNC, NEW_CONNECTION_SEM):
         async with NEW_CONNECTION_SEM:
             LOGGER.info("New connection received.")
 
-            proc, volatile_reader, volatile_writer = await open_ssh_connection(
-                args.host, args.port, args.path_to_remote_python
-            )
-
-            volatile_writer.write(Constants.NEW_CONNECTION.to_bytes(1, "big"))
-            volatile_writer.write(args.remote_port.to_bytes(2, "big"))
-            await volatile_writer.drain()
-
-            uuid_bytes = await volatile_reader.readexactly(16)
-            uuid = UUID(bytes=uuid_bytes)
-
-            LOGGER.debug(f"Received UUID: {uuid}")
-            volatile_writer.write(uuid_bytes)
-            await volatile_writer.drain()
-
-            async with CONNECTION_DICT_SYNC:
-
-                connection = Connection(
-                    volatile_reader,
-                    volatile_writer,
-                    stable_reader,
-                    stable_writer,
-                    uuid=uuid,
-                    max_buffer_size=Constants.MAX_BUFFER_SIZE,
+            try:
+                proc, volatile_reader, volatile_writer = await open_ssh_connection(
+                    args.host, args.port, args.path_to_remote_python
                 )
 
-                if len(alive_connections) + len(dead_tracker) >= args.max_connections:
-                    await connection.close(True)
-                    raise GenericException("Connection limit reached.")
+                volatile_writer.write(Constants.NEW_CONNECTION.to_bytes(1, "big"))
+                volatile_writer.write(args.remote_port.to_bytes(2, "big"))
+                await volatile_writer.drain()
 
-                alive_connections[uuid] = connection
-                alive_processes[uuid] = proc
-                task = asyncio.create_task(normal_operation(connection))
-                alive_tasks[task] = uuid
-                CONNECTION_DICT_SYNC.notify()
+                uuid_bytes = await volatile_reader.readexactly(16)
+                uuid = UUID(bytes=uuid_bytes)
+
+                LOGGER.debug(f"Received UUID: {uuid}")
+                volatile_writer.write(uuid_bytes)
+                await volatile_writer.drain()
+
+                async with CONNECTION_DICT_SYNC:
+
+                    connection = Connection(
+                        volatile_reader,
+                        volatile_writer,
+                        stable_reader,
+                        stable_writer,
+                        uuid=uuid,
+                        max_buffer_size=Constants.MAX_BUFFER_SIZE,
+                    )
+
+                    if len(alive_connections) + len(dead_tracker) >= args.max_connections:
+                        await connection.close(True)
+                        raise GenericException("Connection limit reached.")
+
+                    alive_connections[uuid] = connection
+                    alive_processes[uuid] = proc
+                    task = asyncio.create_task(normal_operation(connection))
+                    alive_tasks[task] = uuid
+                    CONNECTION_DICT_SYNC.notify()
+            except Exception:
+                LOGGER.exception("Error while setting up new connection.")
+                stable_writer.close()
+                await stable_writer.wait_closed()
 
     return new_connection_callback
 
