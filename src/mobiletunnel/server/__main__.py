@@ -143,10 +143,21 @@ async def setup_old_connection(
         LOGGER.debug("Setting new connection parameters.")
         connection.volatile_reader = volatile_reader
         connection.volatile_writer = volatile_writer
+        connection.counter.to_bytes(1, "big")
+
+        counter_byte = await volatile_reader.readexactly(1)
+        counter = int.from_bytes(counter_byte, "big")
+
+        volatile_writer.write(Constants.OLD_CONNECTION.to_bytes(1, "big"))
+        volatile_writer.write(connection.counter.to_bytes(1, "big"))
+
+        await connection.packet_queue.step_verified_counter(counter)
+        packets_to_resend = await connection.packet_queue.get_nonverified_packets()
 
         alive_connections[uuid] = connection
         alive_tasks.add(
-            asyncio.create_task(normal_operation(connection)), uuid
+            asyncio.create_task(normal_operation(connection, start_packets=packets_to_resend)),
+            uuid
         )
         CONNECTION_DICT_SYNC.notify()
 
