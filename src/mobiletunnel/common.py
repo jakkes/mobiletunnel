@@ -192,7 +192,10 @@ class Connection:
         bytes_to_read = 1
 
         while True:
-            data = await self.volatile_reader.readexactly(bytes_to_read)
+            try:
+                data = await self.volatile_reader.readexactly(bytes_to_read)
+            except asyncio.IncompleteReadError as e:
+                return b""
 
             if data == b"":
                 return b""

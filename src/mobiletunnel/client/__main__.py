@@ -33,6 +33,7 @@ class Args(tap.Tap):
 
     host: str
     """Host of remote to open a tunnel to."""
+
     port: int
     """Port of the remote server."""
 
@@ -194,6 +195,19 @@ async def main(args: Args):
 
     while True:
 
+        LOGGER.debug(
+            """
+            Entering main loop step. Currently there are %d alive tasks,
+            %d alive connections, %d alive processes, %d dead connections,
+            and %d reestablishing tasks.
+            """,
+            len(alive_tasks),
+            len(alive_connections),
+            len(alive_processes),
+            len(dead_tracker),
+            len(reestablishing_tasks),
+        )
+
         async with CONNECTION_DICT_SYNC:
 
             notify_task = asyncio.create_task(CONNECTION_DICT_SYNC.wait())
@@ -205,23 +219,28 @@ async def main(args: Args):
                 ),
                 return_when=asyncio.FIRST_COMPLETED,
             )
+            LOGGER.debug(
+                "Main loop about to process done tasks. Top repr are: %s",
+                str([repr(task) for task in done_tasks[:3]])
+            )
 
             if notify_task not in done_tasks:
+                LOGGER.debug("Notify task not done, cancelling it.")
                 notify_task.cancel()
                 try:
                     await notify_task
                 except asyncio.CancelledError:
                     pass
 
-            LOGGER.debug("Processing tasks")
+            LOGGER.debug("Processing %d tasks", len(done_tasks))
             for task in done_tasks:
                 if task == notify_task:
-                    LOGGER.debug("Notify tasks.")
+                    LOGGER.debug("Processing notify task.")
                     await task
                     continue
 
                 if task in alive_tasks:
-                    LOGGER.debug("Alive task.")
+                    LOGGER.debug("Processing alive task.")
                     await task
                     uuid = alive_tasks.pop(task)
                     connection = alive_connections.pop(uuid)

@@ -3,6 +3,8 @@ import logging
 
 def get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
-    logger.addHandler(logging.StreamHandler())
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
     return logger
