@@ -19,7 +19,7 @@ NEW_CONNECTION_SEM = asyncio.Semaphore(10)
 CONNECTION_DICT_SYNC = asyncio.Condition()
 PROTOCOL_VERSION = 0x00
 
-alive_tasks: KeyKeyStore[asyncio.Task, UUID] = {}
+alive_tasks: KeyKeyStore[asyncio.Task, UUID] = KeyKeyStore()
 alive_connections: dict[UUID, Connection] = {}
 dead_connections: dict[UUID, tuple[Connection, datetime.datetime]] = {}
 
