@@ -29,6 +29,8 @@ class Args(tap.Tap):
 
 
 async def reestablish_normal_operation(connection: Connection):
+
+    LOGGER.debug("Reestablishing normal operation for connection %s", connection.uuid)
     connection.volatile_writer.write(Constants.OLD_CONNECTION)
     connection.volatile_writer.write(connection.counter.to_bytes(1, "big"))
     await connection.volatile_writer.drain()
@@ -130,6 +132,7 @@ async def setup_old_connection(
 
     async with CONNECTION_DICT_SYNC:
         if uuid in alive_connections:
+            LOGGER.debug("UUID already in use: %s", uuid)
             volatile_writer.write(Constants.CONNECTION_ERROR)
             await volatile_writer.drain()
             volatile_writer.close()
@@ -137,12 +140,14 @@ async def setup_old_connection(
             raise GenericException("UUID already in use.")
 
         if uuid not in dead_connections:
+            LOGGER.debug("UUID not found among dead connections: %s", uuid)
             volatile_writer.write(Constants.CONNECTION_ERROR)
             await volatile_writer.drain()
             volatile_writer.close()
             await volatile_writer.wait_closed()
             raise GenericException("UUID not found among dead connections.")
 
+        LOGGER.debug("UUID found among dead connections: %s", uuid)
         connection, _ = dead_connections.pop(uuid)
 
         connection.volatile_reader = volatile_reader

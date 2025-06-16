@@ -101,6 +101,7 @@ async def reestablish_connection(connection: Connection, args: Args):
             pushback = min(pushback * 2, 30)
             continue
         except Exception:
+            LOGGER.exception()
             LOGGER.debug(
                 "Failed to reestablish connection, retrying in %d seconds.", pushback
             )
