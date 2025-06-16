@@ -196,10 +196,14 @@ class Connection:
 
         self.tasks = NormalOperationTasks()
 
+    def set_last_communicated_counter_to_current(self):
+        """Sets the last communicated counter to the current received counter, marking
+        that communication happened outside of this class."""
+        self._last_communicated_counter = self._received_counter
+
     @property
     def counter(self) -> int:
-        assert 0 <= self._received_counter < Constants.MAX_SEQUENCE_LENGTH
-        return self._received_counter
+        return self._received_counter %  Constants.MAX_SEQUENCE_LENGTH
 
     async def close(self, notify_other_side: bool):
 
@@ -406,7 +410,7 @@ async def _normal_operation(
                         )
                     )
                     packet_to_send_after_initial_packets_exhausted = None
-                else:
+                elif tasks.stable_read is None:
                     tasks.buffer_availability = asyncio.create_task(
                         connection.packet_queue.buffer_availability()
                     )

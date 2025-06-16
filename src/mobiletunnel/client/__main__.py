@@ -105,6 +105,7 @@ async def reestablish_connection(connection: Connection, args: Args):
     volatile_writer.write(Constants.OLD_CONNECTION.to_bytes(1, "big"))
     volatile_writer.write(connection.uuid.bytes)
     volatile_writer.write(connection.counter.to_bytes(1, "big"))
+    connection.set_last_communicated_counter_to_current()
     await volatile_writer.drain()
 
     response_byte = await volatile_reader.readexactly(1)
@@ -127,7 +128,8 @@ async def reestablish_connection(connection: Connection, args: Args):
     connection.volatile_reader = volatile_reader
     connection.volatile_writer = volatile_writer
 
-    packets_to_resend = await connection.packet_queue.get_nonverified_packets(sequence)
+    await connection.packet_queue.step_verified_counter(sequence)
+    packets_to_resend = await connection.packet_queue.get_nonverified_packets()
     return proc, packets_to_resend
 
 
